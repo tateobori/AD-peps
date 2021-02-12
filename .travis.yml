@@ -1,0 +1,33 @@
+sudo: false
+
+os: linux
+
+language: python
+
+env:
+ - PYTHON_V=3.6 PYTORCH_V=1.4.0
+ - PYTHON_V=3.6 PYTORCH_V=1.5.0
+ - PYTHON_V=3.6 PYTORCH_V=1.6.0
+ - PYTHON_V=3.8 PYTORCH_V=1.4.0
+ - PYTHON_V=3.8 PYTORCH_V=1.5.0
+ - PYTHON_V=3.8 PYTORCH_V=1.6.0
+
+branches:
+  only:
+  - master
+
+notifications:
+  email: false
+  
+before_install:
+- if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh && bash Miniconda3-latest-Linux-x86_64.sh -b -p _miniconda;  else  wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh && bash Miniconda3-latest-MacOSX-x86_64.sh -b -p _miniconda; fi
+- export PATH="$PWD/_miniconda/bin:$PATH"
+- conda config --set always_yes yes --set changeps1 no
+- conda install python=${PYTHON_V}
+- conda update -q conda
+- conda install pytorch==${PYTORCH_V} cpuonly -c pytorch
+- conda install scipy
+
+script: 
+- python -m unittest discover -s examples -p "ctmrg_*.py"
+- python -m unittest discover -s examples -p "optim_*.py"
