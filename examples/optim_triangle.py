@@ -107,7 +107,7 @@ def main():
         raise ValueError("Missing trial state: -instate=None and -ipeps_init_type= "\
             +str(args.ipeps_init_type)+" is not supported")
 
-    print(state)
+
     
     # 2) select the "energy" function 
     if args.tiling == "3x3":

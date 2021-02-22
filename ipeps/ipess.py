@@ -8,7 +8,7 @@ import config as cfg
 # TODO drop constrain for aux bond dimension to be identical on 
 # all bond indices
 
-class IPEPS():
+class IPESS():
     def __init__(self, sites, vertexToSite=None, lX=None, lY=None, peps_args=cfg.peps_args,\
         global_args=cfg.global_args):
         r"""

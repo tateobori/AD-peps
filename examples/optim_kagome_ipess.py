@@ -6,7 +6,7 @@ from ipeps.ipeps import *
 from ctm.generic.env import *
 from ctm.generic import ctmrg
 from models import kagomej1
-# from optim.ad_optim import optimize_state
+from optim.ad_optim import optimize_state
 from optim.ad_optim_lbfgs_mod import optimize_state
 import unittest
 import logging
@@ -19,6 +19,50 @@ parser.add_argument("--j1", type=float, default=1., help="nearest-neighbour coup
 parser.add_argument("--j2", type=float, default=0., help="next nearest-neighbour coupling")
 parser.add_argument("--tiling", default="1x1", help="tiling of the lattice")
 args, unknown_args = parser.parse_known_args()
+
+def initial_ipess(model, bond_dim):
+
+    A = torch.rand((model.phys_dim, bond_dim, bond_dim),\
+        dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+
+    B = torch.rand((model.phys_dim, bond_dim, bond_dim),\
+        dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+
+    C = torch.rand((model.phys_dim, bond_dim, bond_dim),\
+        dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+
+    R_up = torch.rand((bond_dim, bond_dim, bond_dim),\
+        dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+
+    R_down = torch.rand((bond_dim, bond_dim, bond_dim),\
+        dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+
+    A = A/torch.max(torch.abs(A))
+    B = B/torch.max(torch.abs(B))
+    C = C/torch.max(torch.abs(C))
+    R_up = R_up/torch.max(torch.abs(R_up))
+    R_down = R_down/torch.max(torch.abs(R_down))
+    list1= [A, B, C, R_up, R_down]
+    for pess in list1: pess.requires_grad_(True)
+
+    T0 = torch.tensordot(
+            torch.tensordot(
+                C, R_down, ([2], [0])
+            ), torch.tensordot(
+                A, torch.tensordot(
+                    B, R_up, ([2], [1])
+                ), ([2], [2])
+            ), ([0], [4])
+        ).permute(4, 6, 0, 5, 3, 2, 1)
+
+    T0 = T0.contiguous().view(T0.size()[0]**3, T0.size()[3], T0.size()[4], T0.size()[5], T0.size()[6])
+
+    T0 = T0/torch.max(torch.abs(T0)) 
+
+        
+
+    return T0, list1
+
 
 def main():
     cfg.configure(args)
@@ -44,7 +88,7 @@ def main():
 
     else:
         raise ValueError("Invalid tiling: "+str(args.tiling)+" Supported options: "\
-            +"3x3")
+            +"2x2 or 1x1")
 
     if args.instate!=None:
         state = read_ipeps(args.instate, vertexToSite=lattice_to_site)
@@ -61,30 +105,27 @@ def main():
         state.load_checkpoint(args.opt_resume)
     elif args.ipeps_init_type=='RANDOM':
         bond_dim = args.bond_dim
-        
-        A = torch.rand((model.phys_dim**3, bond_dim, bond_dim, bond_dim, bond_dim),\
-            dtype=cfg.global_args.dtype,device=cfg.global_args.device)
 
-        A = A/torch.max(torch.abs(A))
-        sites = {(0,0): A}
+        T1, pess1 = initial_ipess(model, bond_dim)
 
-        if args.tiling == "2x2": 
-            B = torch.rand((model.phys_dim**3, bond_dim, bond_dim, bond_dim, bond_dim),\
-                dtype=cfg.global_args.dtype,device=cfg.global_args.device)
-            C = torch.rand((model.phys_dim**3, bond_dim, bond_dim, bond_dim, bond_dim),\
-                dtype=cfg.global_args.dtype,device=cfg.global_args.device)
-            D = torch.rand((model.phys_dim**3, bond_dim, bond_dim, bond_dim, bond_dim),\
-                dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+        sites = {(0,0): T1}
 
-            B = B/torch.max(torch.abs(B))
-            C = C/torch.max(torch.abs(C))
-            D = D/torch.max(torch.abs(D))
+        if args.tiling == "2x2":
 
-            sites[(1,0)] = B/torch.max(torch.abs(B))
-            sites[(0,1)] = C/torch.max(torch.abs(C))
-            sites[(1,1)] = D/torch.max(torch.abs(D))
+            T2, pess2 = initial_ipess(model, bond_dim)
+            T3, pess3 = initial_ipess(model, bond_dim)
+            T4, pess4 = initial_ipess(model, bond_dim) 
+
+            sites[(1,0)] = T2
+            sites[(0,1)] = T3
+            sites[(1,1)] = T4
+
+            pess1.extend(pess2)
+            pess1.extend(pess3)
+            pess1.extend(pess4)
 
         state = IPEPS(sites, vertexToSite=lattice_to_site)
+  
         
         
     else:
@@ -92,7 +133,10 @@ def main():
             +str(args.ipeps_init_type)+" is not supported")
 
 
+    print(T1)
+    exit()
     print(state)
+
     # 2) select the "energy" function 
     if args.tiling == "1x1":
         energy_f=model.energy_2x2_1site
@@ -158,9 +202,8 @@ def main():
             log.info("Norm(sites): "+", ".join([f"{t.norm()}" for c,t in state.sites.items()]))
 
     # optimize
-    #optimize_state(state, ctm_env, loss_fn, obs_fn=obs_fn)
     print("Start optimization")
-    optimize_state(state, ctm_env, loss_fn, obs_fn=obs_fn)
+    optimize_state(state, ctm_env, loss_fn, obs_fn=obs_fn, parameters=pess1)
 
     # compute final observables for the best variational state
     outputstatefile= args.out_prefix+"_state.json"

@@ -109,7 +109,7 @@ def main():
                 dtype=cfg.global_args.dtype,device=cfg.global_args.device)
             H= torch.rand((model.phys_dim, bond_dim, bond_dim, bond_dim, bond_dim),\
                 dtype=cfg.global_args.dtype,device=cfg.global_args.device)
-            sites[(2,0)]= E/torch.max(torch.abs(E))
+            sites[(2,0)] = E/torch.max(torch.abs(E))
             sites[(3,0)] = F/torch.max(torch.abs(F))
             sites[(2,1)] = G/torch.max(torch.abs(G))
             sites[(3,1)] = H/torch.max(torch.abs(H))

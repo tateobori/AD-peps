@@ -6,6 +6,7 @@ log = logging.getLogger(__name__)
 import torch
 #from memory_profiler import profile
 from optim import lbfgs_modified
+from torchviz import make_dot
 import config as cfg
 
 def store_checkpoint(checkpoint_file, state, optimizer, current_epoch, current_loss,\
@@ -36,7 +37,7 @@ def store_checkpoint(checkpoint_file, state, optimizer, current_epoch, current_l
 
 def optimize_state(state, ctm_env_init, loss_fn, obs_fn=None, post_proc=None,
     main_args=cfg.main_args, opt_args=cfg.opt_args,ctm_args=cfg.ctm_args, 
-    global_args=cfg.global_args):
+    global_args=cfg.global_args, parameters=None):
     r"""
     :param state: initial wavefunction
     :param ctm_env_init: initial environment corresponding to ``state``
@@ -69,7 +70,9 @@ def optimize_state(state, ctm_env_init, loss_fn, obs_fn=None, post_proc=None,
     context= dict({"ctm_args":ctm_args, "opt_args":opt_args, "loss_history": t_data})
     epoch=0
 
-    parameters= state.get_parameters()
+    if parameters is None:
+        parameters= state.get_parameters()
+    
     for A in parameters: A.requires_grad_(True)
 
     optimizer = lbfgs_modified.LBFGS_MOD(parameters, max_iter=opt_args.max_iter_per_epoch, lr=opt_args.lr, \

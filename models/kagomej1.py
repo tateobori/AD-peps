@@ -308,5 +308,4 @@ class KagomeJ1():
 
         res= dict({"ss": Sz0szR+Sx0sxR-nSy0SyR, "szsz": Sz0szR, "sxsx": Sx0sxR, "sysy": -nSy0SyR})
         return res  
-
-
+    

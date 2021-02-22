@@ -6,6 +6,7 @@ from ipeps.ipeps import *
 from ctm.generic.env import *
 from ctm.generic import ctmrg
 from models import kagomej1
+from torchviz import make_dot
 # from optim.ad_optim import optimize_state
 from optim.ad_optim_lbfgs_mod import optimize_state
 import unittest
