@@ -4,7 +4,6 @@ from linalg.svd_gesdd import SVDGESDD
 from linalg.svd_symeig import SVDSYMEIG
 from linalg.svd_arnoldi import SVDSYMARNOLDI, SVDARNOLDI
 from linalg.svd_rsvd import RSVD
-from linalg.gesvd import GESVDFunction
 
 def truncated_svd_gesvd(M, chi, abs_tol=1.0e-14, rel_tol=None, keep_multiplets=False, \
     eps_multiplet=1.0e-12, verbosity=0):

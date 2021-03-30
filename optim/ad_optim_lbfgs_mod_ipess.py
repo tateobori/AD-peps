@@ -6,6 +6,7 @@ log = logging.getLogger(__name__)
 import torch
 #from memory_profiler import profile
 from optim import lbfgs_modified
+from collections import OrderedDict
 import config as cfg
 
 def store_checkpoint(checkpoint_file, state, optimizer, current_epoch, current_loss,\
@@ -72,7 +73,19 @@ def optimize_state(state, ctm_env_init, loss_fn, obs_fn=None, post_proc=None,
     if parameters is None:
         parameters= state.get_parameters()
 
-    for A in parameters: A.requires_grad_(True)
+        for A in parameters:
+            A.requires_grad_(True)
+
+
+    else:
+        param=OrderedDict()
+        i=0
+        for tensor in parameters:
+            for A in tensor:
+                A.requires_grad_(True)
+                param[i]=A
+                i+=1
+        parameters=param.values()
 
 
     optimizer = lbfgs_modified.LBFGS_MOD(parameters, max_iter=opt_args.max_iter_per_epoch, lr=opt_args.lr, \
@@ -120,7 +133,7 @@ def optimize_state(state, ctm_env_init, loss_fn, obs_fn=None, post_proc=None,
         optimizer.zero_grad()
         
         # 0) evaluate loss
-        loss, ctm_env, history, t_ctm, t_check = loss_fn(state, current_env[0], context)
+        loss, ctm_env, history, t_ctm, t_check = loss_fn(state, parameters, current_env[0], context)
 
         # 1) record loss and store current state if the loss improves
         if linesearching:
@@ -164,8 +177,9 @@ def optimize_state(state, ctm_env_init, loss_fn, obs_fn=None, post_proc=None,
         # 6) detach current environment from autograd graph
         lst_C = list(ctm_env.C.values())
         lst_T = list(ctm_env.T.values())
+        lst_state = list(state.get_parameters())
         current_env[0] = ctm_env
-        for el in lst_T + lst_C: el.detach_()
+        for el in lst_T + lst_C + lst_state: el.detach_()
 
         return loss
     
