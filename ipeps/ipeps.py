@@ -553,6 +553,7 @@ def write_ipess(state, outputfile, aux_seq=[0,1,2], tol=1.0e-14, normalize=False
             site_map.append(dict({"siteId": site_ids[-1], "x": coord[0], "y": coord[1]} ))
             json_tensor["siteId"]=site_ids[-1]
             json_tensor["numEntries"]= tlength
+            json_tensor["auxDim"]= tdims[0]
             entries = []
             elem_inds = list(itertools.product( *(range(i) for i in tdims) ))
             for ei in elem_inds:
@@ -632,8 +633,8 @@ def read_ipess(jsonfile, vertexToSite=None, aux_seq=[0,1,2], peps_args=cfg.peps_
 
             # branch 2: key "auxInds" does not exist, all auxiliary 
             # indices have the same dimension
-            X = torch.zeros((4,2,4), dtype=global_args.dtype, device=global_args.device)
-            Y = torch.zeros((4,4,4), dtype=global_args.dtype, device=global_args.device)
+            X = torch.zeros((t["auxDim"],2,t["auxDim"]), dtype=global_args.dtype, device=global_args.device)
+            Y = torch.zeros((t["auxDim"],t["auxDim"],t["auxDim"]), dtype=global_args.dtype, device=global_args.device)
 
             # 1) fill the tensor with elements from the list "entries"
             # which list the non-zero tensor elements in the following
