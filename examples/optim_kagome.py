@@ -17,6 +17,7 @@ parser= cfg.get_args_parser()
 # additional model-dependent arguments
 parser.add_argument("--j1", type=float, default=1., help="nearest-neighbour coupling")
 parser.add_argument("--j2", type=float, default=0., help="next nearest-neighbour coupling")
+parser.add_argument("--Hz", type=float, default=0., help="external magnetic field")
 parser.add_argument("--tiling", default="1x1", help="tiling of the lattice")
 args, unknown_args = parser.parse_known_args()
 
@@ -26,7 +27,7 @@ def main():
     torch.set_num_threads(args.omp_cores)
     torch.manual_seed(args.seed)
 
-    model = kagomej1.KagomeJ1(j1=args.j1, j2=args.j2)
+    model = kagomej1.KagomeJ1(j1=args.j1, j2=args.j2, Hz=args.Hz)
 
     
     # initialize an ipeps
@@ -42,6 +43,12 @@ def main():
         def lattice_to_site(coord):
             return (0, 0)
 
+    elif args.tiling == "3x3":
+        def lattice_to_site(coord):
+            vx = (coord[0] - abs(coord[0]) * 3) % 3
+            vy = (coord[1] - abs(coord[1]) * 3) % 3
+            #print(vx,vy)
+            return ((vx+vy)%3, 0)
     else:
         raise ValueError("Invalid tiling: "+str(args.tiling)+" Supported options: "\
             +"3x3")
@@ -84,6 +91,16 @@ def main():
             sites[(0,1)] = C/torch.max(torch.abs(C))
             sites[(1,1)] = D/torch.max(torch.abs(D))
 
+
+        if args.tiling == "3x3": 
+            B = torch.rand((model.phys_dim**3, bond_dim, bond_dim, bond_dim, bond_dim),\
+                dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+            C = torch.rand((model.phys_dim**3, bond_dim, bond_dim, bond_dim, bond_dim),\
+                dtype=cfg.global_args.dtype,device=cfg.global_args.device)
+
+            sites[(1,0)] = B/torch.max(torch.abs(B))
+            sites[(2,0)] = C/torch.max(torch.abs(C))
+
         state = IPEPS(sites, vertexToSite=lattice_to_site)
         
         
@@ -100,9 +117,12 @@ def main():
     elif args.tiling == "2x2":
         energy_f=model.energy_2x2_4site
 
+    elif args.tiling == "3x3":
+        energy_f=model.energy_2x2_9site
+
     else:
         raise ValueError("Invalid tiling: "+str(args.tiling)+" Supported options: "\
-            +"BIPARTITE, 2SITE, 4SITE, 8SITE")
+            +"BIPARTITE, 2SITE, 4SITE, 9SITE")
 
     @torch.no_grad()
     def ctmrg_conv_energy(state, env, history, ctm_args=cfg.ctm_args):
@@ -174,8 +194,8 @@ def main():
     ctm_env, *ctm_log= ctmrg.run(state, ctm_env, conv_check=ctmrg_conv_energy)
     opt_energy = energy_f(state,ctm_env)
     obs_values, obs_labels = model.eval_obs(state,ctm_env)
-    #print(obs_labels)
-    #print(", ".join([f"{args.opt_max_iter}",f"{opt_energy}"]+[f"{v}" for v in obs_values]))
+    print(obs_labels)
+    print(", ".join([f"{args.opt_max_iter}",f"{opt_energy}"]+[f"{v}" for v in obs_values]))
     print("Enegy",opt_energy)  
 
 if __name__=='__main__':

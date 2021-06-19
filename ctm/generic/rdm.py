@@ -481,6 +481,7 @@ def rdm1x2(coord, ipeps, env, verbosity=0):
     return rdm
 
 def rdm2x2(coord, ipeps, env, verbosity=0):
+    
     r"""
     :param coord: vertex (x,y) specifies upper left site of 2x2 subsystem 
     :param state: underlying wavefunction
@@ -707,3 +708,4 @@ def rdm2x2(coord, ipeps, env, verbosity=0):
     rdm = rdm / torch.einsum('ijklijkl',rdm)
 
     return rdm
+

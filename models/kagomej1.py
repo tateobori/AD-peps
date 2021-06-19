@@ -13,7 +13,7 @@ from math import sqrt
 import itertools
 
 class KagomeJ1():
-    def __init__(self, j1=1.0, j2=0.0, global_args=cfg.global_args):
+    def __init__(self, j1=1.0, j2=0.0, Hz=0.0, global_args=cfg.global_args):
         r"""
         :param j1: nearest-neighbour interaction
         :param j2: next nearest-neighbour interaction
@@ -48,68 +48,22 @@ class KagomeJ1():
         self.phys_dim=2
         self.j1=j1
         self.j2=j2
+        self.Hz=Hz
         
         self.Ham= self.get_h()
         self.h2x2_down, self.h2x2_nn, self.h2x2_nnn= self.get_h_2x2()
         self.obs_ops= self.get_obs_ops()
 
-    def get_h_another(self):
-        s2 = su2.SU2(self.phys_dim, dtype=self.dtype, device=self.device)
-        id3= torch.eye(8**3,dtype=self.dtype,device=self.device)
-        id3= id3.view(8,8,8,8,8,8).contiguous()
-
-        # h_on : on site hamiltonian in d=8
-        expr_kron = 'ij,ab->iajb'
-        SS= torch.einsum(expr_kron,s2.SZ(),s2.SZ()) + 0.5*(torch.einsum(expr_kron,s2.SP(),s2.SM()) \
-            + torch.einsum(expr_kron,s2.SM(),s2.SP()))
-        SS= SS.contiguous()
-        expr_kron = 'ijab,kc->ijkabc'
-        SSS= torch.einsum(expr_kron,SS,s2.I())
-        SSS = SSS + SSS.permute(2,0,1,5,3,4) # -A-B- + -B-C- 
-        h_on= SSS.view(8,8).contiguous() 
-        h2x2_on= torch.einsum('ia,jklbcd->ijklabcd',h_on,id3)
-
-        h2x2_on= h2x2_on + h2x2_on.permute(3,0,1,2,7,4,5,6) + h2x2_on.permute(2,3,0,1,6,7,4,5)\
-            + h2x2_on.permute(1,2,3,0,5,6,7,4)## -A1- + -A2- + -A3- + -A4-
-
-        h2x2_on= h2x2_on.contiguous()
-
-        # h_x:   corresponds to h_ca and h_ba on up triangle
-        # h_y:   corresponds to h_ac and h_bc on down triangle
-        id4= torch.eye(16, dtype=self.dtype, device=self.device)
-        id4= id4.view(2,2,2,2,2,2,2,2).contiguous()
-        h_ca_up= torch.einsum('ijab,klmncdef->klijmncdabef', SS, id4)
-        h_ba_up= torch.einsum('ijab,klmncdef->kiljmncadbef', SS, id4)
-        h_ac_down= torch.einsum('ijab,klmncdef->iklmnjacdefb', SS, id4)
-        h_bc_down= torch.einsum('ijab,klmncdef->kilmnjcadefb', SS, id4)
-
-        h_x= h_ca_up.contiguous().view(8,8,8,8) + h_ba_up.contiguous().view(8,8,8,8)
-        h_y= h_ac_down.contiguous().view(8,8,8,8) + h_bc_down.contiguous().view(8,8,8,8)
-
-        id2= torch.eye(8**2, dtype=self.dtype, device=self.device)
-        id2= id2.view(8,8,8,8).contiguous()
-
-        h2x2_x= torch.einsum('ijab,klcd->ijklabcd',h_x,id2)
-        h2x2_x= h2x2_x + h2x2_x.permute(2,3,0,1,6,7,4,5)
-
-        h2x2_y= torch.einsum('ijab,klcd->ikjlacbd',h_y,id2)
-        h2x2_y= h2x2_y + h2x2_y.permute(1,0,3,2,5,4,7,6)
-
-        h2x2_nn= h2x2_x.contiguous() + h2x2_y.contiguous()
-
-        Ham = (h2x2_on/4.0 + h2x2_nn/2.0)/3.0
-        #Ham = h2x2_nn/2.0
-        return Ham
-
     def get_h(self):
         s2 = su2.SU2(self.phys_dim, dtype=self.dtype, device=self.device)
-        id3= torch.eye(8**3,dtype=self.dtype,device=self.device)
+        id3= torch.eye(8**3)
         id3= id3.view(8,8,8,8,8,8).contiguous()
 
         # h_up : on site hamiltonian in d=8
         expr_kron = 'ij,ab->iajb'
         SS= torch.einsum(expr_kron,s2.SZ(),s2.SZ()) + 0.5*(torch.einsum(expr_kron,s2.SP(),s2.SM()) \
-            + torch.einsum(expr_kron,s2.SM(),s2.SP()))
+            + torch.einsum(expr_kron,s2.SM(),s2.SP())) -0.25*self.Hz*(torch.einsum(expr_kron,s2.SZ(),s2.I()) \
+            + torch.einsum(expr_kron,s2.I(),s2.SZ()) )
         SS= SS.contiguous()
         expr_kron = 'ijab,kc->ijkabc'
         SSS= torch.einsum(expr_kron,SS,s2.I())
@@ -126,7 +80,7 @@ class KagomeJ1():
         # h_x:   corresponds to h_bc terms on up triangle
         # h_y:   corresponds to h_ca terms on up triangle
         # h_nnn: correspomds to h_ba terms on up triangle
-        id4= torch.eye(16, dtype=self.dtype, device=self.device)
+        id4= torch.eye(16)
         id4= id4.view(2,2,2,2,2,2,2,2).contiguous()
         h_bc= torch.einsum('ijab,klmncdef->kilmnjcadefb', SS, id4)
         h_ca= torch.einsum('ijab,klmncdef->klijmncdabef', SS, id4)
@@ -163,7 +117,8 @@ class KagomeJ1():
         # h_up : on site hamiltonian in d=8
         expr_kron = 'ij,ab->iajb'
         SS= torch.einsum(expr_kron,s2.SZ(),s2.SZ()) + 0.5*(torch.einsum(expr_kron,s2.SP(),s2.SM()) \
-            + torch.einsum(expr_kron,s2.SM(),s2.SP()))
+            + torch.einsum(expr_kron,s2.SM(),s2.SP())) -0.25*self.Hz*(torch.einsum(expr_kron,s2.SZ(),s2.I()) \
+            + torch.einsum(expr_kron,s2.I(),s2.SZ()) )
         SS= SS.contiguous()
         expr_kron = 'ijab,kc->ijkabc'
         SSS= torch.einsum(expr_kron,SS,s2.I())
@@ -171,8 +126,8 @@ class KagomeJ1():
         h_down= SSS.view(8,8).contiguous() 
         h2x2_down= torch.einsum('ia,jklbcd->ijklabcd',h_down,id3)
 
-        h2x2_down= h2x2_down + h2x2_down.permute(3,0,1,2,7,4,5,6) + h2x2_down.permute(2,3,0,1,6,7,4,5)\
-            + h2x2_down.permute(1,2,3,0,5,6,7,4)## -A1- + -A2- + -A3- + -A4-
+        #h2x2_down= h2x2_down + h2x2_down.permute(3,0,1,2,7,4,5,6) + h2x2_down.permute(2,3,0,1,6,7,4,5)\
+        #    + h2x2_down.permute(1,2,3,0,5,6,7,4)## -A1- + -A2- + -A3- + -A4-
 
         h2x2_down= h2x2_down.contiguous()
 
@@ -283,40 +238,7 @@ class KagomeJ1():
         return (energy_up_tri + energy_down_tri)/3.0
 
     def energy_2x2_9site(self,state,env):
-        r"""
 
-        :param state: wavefunction
-        :param env: CTM environment
-        :type state: IPEPS
-        :type env: ENV
-        :return: energy per site
-        :rtype: float
-
-        We assume iPEPS with 2x2 unit cell containing four tensors A, B, C, and D with
-        simple PBC tiling::
-
-            A B A B
-            C D C D
-            A B A B
-            C D C D
-    
-        Taking the reduced density matrix :math:`\rho_{2x2}` of 2x2 cluster given by 
-        :py:func:`ctm.generic.rdm.rdm2x2` with indexing of sites as follows 
-        :math:`\rho_{2x2}(s_0,s_1,s_2,s_3;s'_0,s'_1,s'_2,s'_3)`::
-        
-            s0--s1
-            |   |
-            s2--s3
-
-        and without assuming any symmetry on the indices of the individual tensors a set
-        of four :math:`\rho_{2x2}`'s are needed over which :math:`h2` operators 
-        for the nearest and next-neaerest neighbour pairs are evaluated::  
-
-            A3--1B   B3--1A   C3--1D   D3--1C
-            2    2   2    2   2    2   2    2
-            0    0   0    0   0    0   0    0
-            C3--1D & D3--1C & A3--1B & B3--1A
-        """
         energy_down=0
         energy_nn=0
         energy_nnn=0
@@ -325,10 +247,10 @@ class KagomeJ1():
             energy_down += torch.einsum('ijklabcd,ijklabcd',tmp_rdm,self.h2x2_down)
             energy_nn += torch.einsum('ijklabcd,ijklabcd',tmp_rdm,self.h2x2_nn)
             energy_nnn += torch.einsum('ijklabcd,ijklabcd',tmp_rdm,self.h2x2_nnn)
-        energy_down_tri = self.j1*energy_down/36.0
-        energy_up_tri = self.j1*energy_nn/36.0*2.0 + self.j1*energy_nnn/9.0
+        energy_down_tri = self.j1*energy_down
+        energy_up_tri = self.j1*energy_nn/2.0 + self.j1*energy_nnn
 
-        return (energy_up_tri + energy_down_tri)/3.0
+        return (energy_up_tri + energy_down_tri)/9.0
 
     def eval_obs(self,state,env):
         r"""
@@ -380,11 +302,13 @@ class KagomeJ1():
                 obs[f"sx_A{coord}"]=0.5 * ( obs[f"sp_A{coord}"] + obs[f"sm_A{coord}"] )
                 obs[f"sx_B{coord}"]=0.5 * ( obs[f"sp_B{coord}"] + obs[f"sm_B{coord}"] )
                 obs[f"sx_C{coord}"]=0.5 * ( obs[f"sp_C{coord}"] + obs[f"sm_C{coord}"] )
+                obs[f"sz/Mz{coord}"]=( obs[f"sz_A{coord}"] + obs[f"sz_B{coord}"] + obs[f"sz_C{coord}"] )/1.50
 
         # prepare list with labels and values
         obs_labels=[f"m{coord}_A" for coord in state.sites.keys()] + [f"m{coord}_B" for coord in state.sites.keys()] + [f"m{coord}_C" for coord in state.sites.keys()] \
             +[f"sz_A{coord}" for coord in state.sites.keys()] + [f"sz_B{coord}" for coord in state.sites.keys()] + [f"sz_C{coord}" for coord in state.sites.keys()] \
-            +[f"sx_A{coord}" for coord in state.sites.keys()] + [f"sx_B{coord}" for coord in state.sites.keys()] + [f"sx_C{coord}" for coord in state.sites.keys()]
+            +[f"sx_A{coord}" for coord in state.sites.keys()] + [f"sx_B{coord}" for coord in state.sites.keys()] + [f"sx_C{coord}" for coord in state.sites.keys()] \
+            +[f"sz/Mz{coord}" for coord in state.sites.keys()]
 
         obs_values=[obs[label] for label in obs_labels]
         return obs_values, obs_labels
